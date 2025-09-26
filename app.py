@@ -136,6 +136,27 @@ def logout():
     session.pop('user_id', None)
     flash("你已成功注销。", "info"); return redirect(url_for('home'))
 
+# 【新功能】删除帖子的路由
+@app.route('/delete_post/<int:post_id>', methods=['POST'])
+def delete_post():
+    # 确保用户已登录
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    # 从数据库中查找帖子
+    post_to_delete = Post.query.get_or_404(post_id)
+
+    # 【重要】检查当前登录的用户是否是帖子的作者
+    if post_to_delete.author.id != session['user_id']:
+        flash("你没有权限删除这篇内容！", "error")
+        return redirect(url_for('home'))
+    
+    # 从数据库中删除帖子
+    db.session.delete(post_to_delete)
+    db.session.commit()
+    
+    flash("内容已成功删除。", "success")
+    return redirect(url_for('home'))
 # --- 启动应用 ---
 if __name__ == '__main__':
     with app.app_context():
