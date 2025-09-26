@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}我们的笔记本{% endblock %}</title>
+    <style>
+        body { font-family: sans-serif; }
+        .flash-success { background-color: #d4edda; color: #155724; padding: 10px; margin-bottom: 15px; border: 1px solid #c3e6cb; border-radius: 4px; }
+        .flash-error { background-color: #f8d7da; color: #721c24; padding: 10px; margin-bottom: 15px; border: 1px solid #f5c6cb; border-radius: 4px; }
+        .flash-info { background-color: #cce5ff; color: #004085; padding: 10px; margin-bottom: 15px; border: 1px solid #b8daff; border-radius: 4px; }
+        nav { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="{{ url_for('home') }}">主页</a> |
+        {% if session['user_id'] %}
+            <a href="{{ url_for('create_post') }}">发布新内容</a> |
+            <a href="{{ url_for('logout') }}">注销</a>
+        {% else %}
+            <a href="{{ url_for('login') }}">登录</a> |
+            <a href="{{ url_for('register') }}">注册</a>
+        {% endif %}
+    </nav>
+    <hr>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+
+    {# 【关键修复！】我们在这里为 JavaScript 代码开了一个口子 #}
+    {% block scripts %}{% endblock %}
+</body>
+</html>

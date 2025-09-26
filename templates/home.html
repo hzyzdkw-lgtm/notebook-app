@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* --- 新增样式：用于创建两栏布局 --- */
+    .main-container {
+        display: flex;
+        gap: 20px; /* 栏间距 */
+    }
+    .posts-column {
+        flex: 3; /* 帖子栏占 3 份宽度 */
+    }
+    .remarks-column {
+        flex: 2; /* 备注栏占 2 份宽度 */
+        border-left: 1px solid #eee;
+        padding-left: 20px;
+    }
+    .remark-card {
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+    .remark-card blockquote {
+        margin: 0 0 10px 0;
+        padding-left: 10px;
+        border-left: 3px solid #ccc;
+        font-style: italic;
+        color: #555;
+    }
+    .highlight { /* 简化高亮样式 */
+        background-color: yellow;
+        cursor: pointer;
+    }
+</style>
+
+<h1>我们的共同笔记本</h1>
+
+{% if user %}
+    <h2>欢迎回来, {{ user.username }}!</h2>
+{% else %}
+    <h2>欢迎! 请登录或注册来发布内容。</h2>
+{% endif %}
+
+<hr>
+
+<div class="main-container">
+    <div class="posts-column">
+        <h3>内容墙:</h3>
+        {% if posts %}
+            {% for post in posts %}
+                <div class="post-container" data-post-id="{{ post.id }}" style="border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
+                    <p class="post-content" style="white-space: pre-wrap; word-wrap: break-word;">{{ post.content }}</p>
+                    <small>发布者: <strong>{{ post.author.username }}</strong> 于 {{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>这里还没有任何内容，快去发布第一条吧！</p>
+        {% endif %}
+    </div>
+
+    <div class="remarks-column">
+        <h3>备注列表:</h3>
+        <div id="remarks-list">
+            <p>点击高亮区域可查看对应备注。</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const remarksByPost = {{ remarks_by_post | tojson }};
+        const remarksListDiv = document.getElementById('remarks-list');
+        
+        // --- 第一部分：加载并显示已有的高亮和备注 ---
+        function renderExistingRemarks() {
+            remarksListDiv.innerHTML = '<p>点击高亮区域可查看对应备注。</p>'; // 清空
+            document.querySelectorAll('.post-content').forEach(contentElement => {
+                let originalContent = contentElement.innerHTML;
+                const postId = contentElement.closest('.post-container').dataset.postId;
+                
+                if (remarksByPost[postId]) {
+                    remarksByPost[postId].forEach((remark, index) => {
+                        const remarkId = `remark-${postId}-${index}`;
+                        const highlightedHtml = `<span class="highlight" data-remark-id="${remarkId}">${remark.highlighted_text}</span>`;
+                        originalContent = originalContent.replace(remark.highlighted_text, highlightedHtml);
+                        
+                        // 创建备注卡片并添加到右侧栏
+                        const card = document.createElement('div');
+                        card.className = 'remark-card';
+                        card.id = remarkId;
+                        card.innerHTML = `
+                            <blockquote>"${remark.highlighted_text}"</blockquote>
+                            <p>${remark.remark_text}</p>
+                            <small>备注者: <strong>${remark.author_username}</strong></small>
+                        `;
+                        remarksListDiv.appendChild(card);
+                    });
+                    contentElement.innerHTML = originalContent;
+                }
+            });
+
+            // 为所有高亮区域添加点击滚动事件
+            document.querySelectorAll('.highlight').forEach(highlight => {
+                highlight.addEventListener('click', () => {
+                    const remarkId = highlight.dataset.remarkId;
+                    const remarkCard = document.getElementById(remarkId);
+                    if (remarkCard) {
+                        remarkCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        remarkCard.style.backgroundColor = '#e8f4ff';
+                        setTimeout(() => { remarkCard.style.backgroundColor = '#f9f9f9'; }, 1000);
+                    }
+                });
+            });
+        }
+
+        renderExistingRemarks(); // 页面加载时立即渲染
+
+        // --- 第二部分：添加新的高亮和备注 ---
+        document.querySelectorAll('.post-container').forEach(container => {
+            container.addEventListener('mouseup', (event) => {
+                if (!{{ user.id | default('null') }}) { return; }
+                if (event.target.classList.contains('highlight')) { return; }
+
+                const selection = window.getSelection();
+                const selectedText = selection.toString().trim();
+
+                if (selectedText.length > 0) {
+                    const remarkText = prompt("请输入你的备注:", "");
+                    if (remarkText !== null) {
+                        const postId = container.dataset.postId;
+                        fetch('/add_remark', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                post_id: postId,
+                                highlighted_text: selectedText,
+                                remark_text: remarkText
+                            })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                window.location.reload();
+                            } else {
+                                alert("保存失败: " + data.message);
+                            }
+                        });
+                    }
+                    selection.removeAllRanges();
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}
