@@ -157,6 +157,40 @@ def delete_post():
     
     flash("内容已成功删除。", "success")
     return redirect(url_for('home'))
+
+# 【新功能】编辑帖子的路由
+@app.route('/edit_post/<int:post_id>', methods=['GET', 'POST'])
+def edit_post(post_id):
+    # 确保用户已登录
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    # 从数据库中查找要编辑的帖子
+    post_to_edit = Post.query.get_or_404(post_id)
+
+    # 【重要】检查当前登录的用户是否是帖子的作者
+    if post_to_edit.author.id != session['user_id']:
+        flash("你没有权限编辑这篇内容！", "error")
+        return redirect(url_for('home'))
+
+    # 如果是 POST 请求 (用户提交了编辑表单)
+    if request.method == 'POST':
+        new_content = request.form['content']
+        if not new_content:
+            flash("内容不能为空！", "error")
+            return redirect(url_for('edit_post', post_id=post_id))
+        
+        # 更新数据库中的内容
+        post_to_edit.content = new_content
+        db.session.commit()
+        
+        flash("内容已成功更新。", "success")
+        return redirect(url_for('home'))
+
+    # 如果是 GET 请求 (用户第一次访问编辑页面)
+    # 渲染编辑页面，并把当前的帖子内容传递过去
+    return render_template('edit_post.html', post=post_to_edit)
+
 # --- 启动应用 ---
 if __name__ == '__main__':
     with app.app_context():

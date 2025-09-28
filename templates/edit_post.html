@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}编辑内容{% endblock %}
+
+{% block content %}
+    <h1>编辑你的内容</h1>
+    <form method="post">
+        {# 关键部分：textarea 里直接显示了 post.content 的旧内容 #}
+        <textarea name="content" rows="10" cols="80" required>{{ post.content }}</textarea><br><br>
+        <button type="submit">保存更改</button>
+        <a href="{{ url_for('home') }}">取消</a>
+    </form>
+{% endblock %}

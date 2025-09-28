@@ -43,6 +43,30 @@
     <h2>欢迎! 请登录或注册来发布内容。</h2>
 {% endif %}
 
+<div class="posts-column">
+    <h3>内容墙:</h3>
+    {% if posts %}
+        {% for post in posts %}
+            <div class="post-container" data-post-id="{{ post.id }}" style="border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
+                <p class="post-content" style="white-space: pre-wrap; word-wrap: break-word;">{{ post.content }}</p>
+                <small>发布者: <strong>{{ post.author.username }}</strong> 于 {{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                
+                {# 只有当登录用户是作者时，才显示编辑和删除按钮 #}
+                {% if user and user.id == post.author.id %}
+                    {# 【新功能！】编辑链接 #}
+                    <a href="{{ url_for('edit_post', post_id=post.id) }}" style="margin-left: 10px;">编辑</a>
+
+                    <form action="{{ url_for('delete_post', post_id=post.id) }}" method="post" style="display: inline; margin-left: 10px;">
+                        <button type="submit" onclick="return confirm('你确定要删除这篇内容吗？');">删除</button>
+                    </form>
+                {% endif %}
+            </div>
+        {% endfor %}
+    {% else %}
+        <p>这里还没有任何内容，快去发布第一条吧！</p>
+    {% endif %}
+</div>
+
 <hr>
 
 <div class="main-container">
