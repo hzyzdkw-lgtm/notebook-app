@@ -35,7 +35,7 @@
     }
 </style>
 
-<h1>我们的共同笔记本</h1>
+<h1>V3 - 这是最终的修复版本</h1>
 
 {% if user %}
     <h2>欢迎回来, {{ user.username }}!</h2>
@@ -85,4 +85,83 @@
         const remarksListDiv = document.getElementById('remarks-list');
 
         function renderExistingRemarks() {
-            remarksListDiv.innerHTML = '<p>点击高
+            remarksListDiv.innerHTML = '<p>点击高亮区域可查看对应备注。</p>'; 
+            document.querySelectorAll('.post-content').forEach(contentElement => {
+                let originalContent = contentElement.innerHTML;
+                const postId = contentElement.closest('.post-container').dataset.postId;
+
+                if (remarksByPost[postId]) {
+                    remarksByPost[postId].forEach((remark, index) => {
+                        const remarkId = `remark-${postId}-${index}`;
+                        const highlightedHtml = `<span class="highlight" data-remark-id="${remarkId}">${remark.highlighted_text}</span>`;
+                        originalContent = originalContent.replace(remark.highlighted_text, highlightedHtml);
+
+                        const card = document.createElement('div');
+                        card.className = 'remark-card';
+                        card.id = remarkId;
+                        card.innerHTML = `
+                            <blockquote>"${remark.highlighted_text}"</blockquote>
+                            <p>${remark.remark_text}</p>
+                            <small>备注者: <strong>${remark.author_username}</strong></small>
+                        `;
+                        if (remarksListDiv.querySelector('p')) {
+                            remarksListDiv.innerHTML = '';
+                        }
+                        remarksListDiv.appendChild(card);
+                    });
+                    contentElement.innerHTML = originalContent;
+                }
+            });
+
+            document.querySelectorAll('.highlight').forEach(highlight => {
+                highlight.addEventListener('click', () => {
+                    const remarkId = highlight.dataset.remarkId;
+                    const remarkCard = document.getElementById(remarkId);
+                    if (remarkCard) {
+                        remarkCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        remarkCard.style.backgroundColor = '#e8f4ff';
+                        setTimeout(() => { remarkCard.style.backgroundColor = '#f9f9f9'; }, 1000);
+                    }
+                });
+            });
+        }
+
+        renderExistingRemarks();
+
+        document.querySelectorAll('.post-container').forEach(container => {
+            container.addEventListener('mouseup', (event) => {
+                if (!{{ user.id | default('null') }}) { return; }
+                if (event.target.classList.contains('highlight')) { return; }
+
+                const selection = window.getSelection();
+                const selectedText = selection.toString().trim();
+
+                if (selectedText.length > 0) {
+                    const remarkText = prompt("请输入你的备注:", "");
+                    if (remarkText !== null) {
+                        const postId = container.dataset.postId;
+                        fetch('/add_remark', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                post_id: postId,
+                                highlighted_text: selectedText,
+                                remark_text: remarkText
+                            })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                window.location.reload();
+                            } else {
+                                alert("保存失败: " + data.message);
+                            }
+                        });
+                    }
+                    selection.removeAllRanges();
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}
