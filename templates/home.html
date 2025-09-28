@@ -2,37 +2,13 @@
 
 {% block content %}
 <style>
-    /* --- 最终样式：用于创建两栏布局 --- */
-    .main-container {
-        display: flex;
-        gap: 20px; /* 栏间距 */
-    }
-    .posts-column {
-        flex: 3; /* 帖子栏占 3 份宽度 */
-    }
-    .remarks-column {
-        flex: 2; /* 备注栏占 2 份宽度 */
-        border-left: 1px solid #eee;
-        padding-left: 20px;
-    }
-    .remark-card {
-        background-color: #f9f9f9;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        padding: 10px;
-        margin-bottom: 10px;
-    }
-    .remark-card blockquote {
-        margin: 0 0 10px 0;
-        padding-left: 10px;
-        border-left: 3px solid #ccc;
-        font-style: italic;
-        color: #555;
-    }
-    .highlight { /* 高亮样式 */
-        background-color: yellow;
-        cursor: pointer;
-    }
+    /* (CSS样式和之前一样，无需修改) */
+    .main-container { display: flex; gap: 20px; }
+    .posts-column { flex: 3; }
+    .remarks-column { flex: 2; border-left: 1px solid #eee; padding-left: 20px; }
+    .remark-card { background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 5px; padding: 10px; margin-bottom: 10px; transition: background-color 0.5s ease; }
+    .remark-card blockquote { margin: 0 0 10px 0; padding-left: 10px; border-left: 3px solid #ccc; font-style: italic; color: #555; }
+    .highlight { background-color: yellow; cursor: pointer; }
 </style>
 
 <h1>我们的共同笔记本</h1>
@@ -53,11 +29,8 @@
                 <div class="post-container" data-post-id="{{ post.id }}" style="border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
                     <p class="post-content" style="white-space: pre-wrap; word-wrap: break-word;">{{ post.content }}</p>
                     <small>发布者: <strong>{{ post.author.username }}</strong> 于 {{ post.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
-
-                    {# 只有当登录用户是作者时，才显示编辑和删除按钮 #}
                     {% if user and user.id == post.author.id %}
                         <a href="{{ url_for('edit_post', post_id=post.id) }}" style="margin-left: 10px;">编辑</a>
-
                         <form action="{{ url_for('delete_post', post_id=post.id) }}" method="post" style="display: inline; margin-left: 10px;">
                             <button type="submit" onclick="return confirm('你确定要删除这篇内容吗？');">删除</button>
                         </form>
@@ -72,7 +45,7 @@
     <div class="remarks-column">
         <h3>备注列表:</h3>
         <div id="remarks-list">
-            <p>点击高亮区域可查看对应备注。</p>
+            <p>在这里查看和管理备注。</p>
         </div>
     </div>
 </div>
@@ -81,80 +54,118 @@
 
 {% block scripts %}
 <script>
-    // (JavaScript 部分和之前一样，无需修改)
     document.addEventListener('DOMContentLoaded', () => {
         const remarksByPost = {{ remarks_by_post | tojson }};
         const remarksListDiv = document.getElementById('remarks-list');
+        let remarkCounter = 0; // 用于生成唯一的 remark ID
 
-        function renderExistingRemarks() {
-            remarksListDiv.innerHTML = '<p>点击高亮区域可查看对应备注。</p>'; 
-            document.querySelectorAll('.post-content').forEach(contentElement => {
-                let originalContent = contentElement.innerHTML;
-                const postId = contentElement.closest('.post-container').dataset.postId;
+        // --- 全新升级的渲染和交互函数 ---
 
-                if (remarksByPost[postId]) {
-                    remarksByPost[postId].forEach((remark, index) => {
-                        const remarkId = `remark-${postId}-${index}`;
-                        const highlightedHtml = `<span class="highlight" data-remark-id="${remarkId}">${remark.highlighted_text}</span>`;
-                        originalContent = originalContent.replace(remark.highlighted_text, highlightedHtml);
-
-                        const card = document.createElement('div');
-                        card.className = 'remark-card';
-                        card.id = remarkId;
-                        card.innerHTML = `
-                            <blockquote>"${remark.highlighted_text}"</blockquote>
-                            <p>${remark.remark_text}</p>
-                            <small>备注者: <strong>${remark.author_username}</strong></small>
-                        `;
-                        if (remarksListDiv.querySelector('p')) {
-                            remarksListDiv.innerHTML = '';
-                        }
-                        remarksListDiv.appendChild(card);
-                    });
-                    contentElement.innerHTML = originalContent;
-                }
-            });
-
-            document.querySelectorAll('.highlight').forEach(highlight => {
-                highlight.addEventListener('click', () => {
-                    const remarkId = highlight.dataset.remarkId;
-                    const remarkCard = document.getElementById(remarkId);
-                    if (remarkCard) {
-                        remarkCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        remarkCard.style.backgroundColor = '#e8f4ff';
-                        setTimeout(() => { remarkCard.style.backgroundColor = '#f9f9f9'; }, 1000);
-                    }
-                });
-            });
+        function addRemarkCard(remark, postId) {
+            // 如果是初始状态，先清空
+            if (remarksListDiv.querySelector('p')) {
+                remarksListDiv.innerHTML = '';
+            }
+            const remarkId = `remark-${postId}-${remark.id || remarkCounter++}`;
+            const card = document.createElement('div');
+            card.className = 'remark-card';
+            card.id = remarkId;
+            card.innerHTML = `
+                <blockquote>"${remark.highlighted_text}"</blockquote>
+                <p>${remark.remark_text}</p>
+                <small>备注者: <strong>${remark.author_username || remark.author.username}</strong></small>
+            `;
+            remarksListDiv.appendChild(card);
+            return remarkId;
         }
 
-        renderExistingRemarks();
+        function highlightText(textNode, textToHighlight, remarkId) {
+            const text = textNode.textContent;
+            const startIndex = text.indexOf(textToHighlight);
+            if (startIndex === -1) return;
 
+            const endIndex = startIndex + textToHighlight.length;
+
+            const range = document.createRange();
+            range.setStart(textNode, startIndex);
+            range.setEnd(textNode, endIndex);
+            
+            const highlightSpan = document.createElement('span');
+            highlightSpan.className = 'highlight';
+            highlightSpan.dataset.remarkId = remarkId;
+            
+            range.surroundContents(highlightSpan);
+        }
+
+        // --- 第一部分：加载已有的备注 ---
+        function renderExistingRemarks() {
+            document.querySelectorAll('.post-content').forEach(contentElement => {
+                const postId = contentElement.closest('.post-container').dataset.postId;
+                if (remarksByPost[postId]) {
+                    const postRemarks = remarksByPost[postId];
+                    // 递归地查找并替换文本节点
+                    function findAndHighlight(node) {
+                        if (node.nodeType === 3) { // 3 代表文本节点
+                            postRemarks.forEach(remark => {
+                                if (node.textContent.includes(remark.highlighted_text)) {
+                                    const remarkId = addRemarkCard(remark, postId);
+                                    highlightText(node, remark.highlighted_text, remarkId);
+                                }
+                            });
+                        } else if (node.nodeType === 1) { // 1 代表元素节点
+                            Array.from(node.childNodes).forEach(findAndHighlight);
+                        }
+                    }
+                    findAndHighlight(contentElement);
+                }
+            });
+        }
+        
+        // 我们需要延迟执行，等待内容渲染完成
+        setTimeout(renderExistingRemarks, 100);
+
+        // --- 第二部分：添加新的高亮和备注 (无刷新！) ---
         document.querySelectorAll('.post-container').forEach(container => {
             container.addEventListener('mouseup', (event) => {
                 if (!{{ user.id | default('null') }}) { return; }
-                if (event.target.classList.contains('highlight')) { return; }
 
                 const selection = window.getSelection();
-                const selectedText = selection.toString().trim();
+                if (selection.rangeCount === 0) return;
 
-                if (selectedText.length > 0) {
+                const range = selection.getRangeAt(0);
+                const selectedText = range.toString().trim();
+
+                if (selectedText.length > 0 && !range.commonAncestorContainer.parentElement.classList.contains('highlight')) {
                     const remarkText = prompt("请输入你的备注:", "");
-                    if (remarkText !== null) {
+                    if (remarkText !== null && remarkText.trim() !== "") {
                         const postId = container.dataset.postId;
+                        
+                        const dataToSend = {
+                            post_id: postId,
+                            highlighted_text: selectedText,
+                            remark_text: remarkText
+                        };
+
                         fetch('/add_remark', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                post_id: postId,
-                                highlighted_text: selectedText,
-                                remark_text: remarkText
-                            })
+                            body: JSON.stringify(dataToSend)
                         })
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                window.location.reload();
+                                // 【体验升级！】不再刷新页面，而是动态添加
+                                const remarkId = addRemarkCard(data.remark, postId);
+                                
+                                const highlightSpan = document.createElement('span');
+                                highlightSpan.className = 'highlight';
+                                highlightSpan.dataset.remarkId = remarkId;
+                                range.surroundContents(highlightSpan);
+
+                                const newCard = document.getElementById(remarkId);
+                                if(newCard) {
+                                    newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
                             } else {
                                 alert("保存失败: " + data.message);
                             }
@@ -163,6 +174,19 @@
                     selection.removeAllRanges();
                 }
             });
+        });
+        
+        // --- 第三部分：点击高亮联动备注 ---
+        document.body.addEventListener('click', (event) => {
+            if (event.target.classList.contains('highlight')) {
+                const remarkId = event.target.dataset.remarkId;
+                const remarkCard = document.getElementById(remarkId);
+                if (remarkCard) {
+                    remarkCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    remarkCard.style.backgroundColor = '#e8f4ff';
+                    setTimeout(() => { remarkCard.style.backgroundColor = '#f9f9f9'; }, 1000);
+                }
+            }
         });
     });
 </script>
